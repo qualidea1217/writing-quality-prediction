@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 
 
-
-
-if __name__ == '__main__':
-    logs = pd.read_csv('./data/train_logs.csv')
-    scores = pd.read_csv('./data/train_scores.csv')
-
+def preprocess(logs, scores):
     data = pd.merge(logs, scores, on='id')
 
     data['activity'].replace(
@@ -62,5 +62,45 @@ if __name__ == '__main__':
     score = preprocessed.loc[:, 'score']
     label = preprocessed.drop('score', axis=1)
     label = preprocessed.drop('id', axis=1)
-    print(preprocessed)
-    print(score)
+
+    return label, score
+
+def split(x, y):
+    train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.4)
+    val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=0.5)
+
+    return train_x, train_y, val_x, val_y, test_x, test_y
+
+
+if __name__ == '__main__':
+    logs = pd.read_csv('./data/train_logs.csv')
+    scores = pd.read_csv('./data/train_scores.csv')
+
+    x, y = preprocess(logs, scores)
+
+    train_x, train_y, val_x, val_y, test_x, test_y = split(x, y)
+
+    # print(train_x.shape, train_y.shape)
+
+    scaler = StandardScaler()
+    train_x = scaler.fit_transform(train_x)
+    val_x = scaler.transform(val_x)
+    test_x = scaler.transform(test_x)
+
+    # print(train_y.unique())
+
+    model = RandomForestRegressor()
+
+    model.fit(train_x, train_y)
+
+    train_pred = model.predict(train_x)
+    val_pred = model.predict(val_x)
+    test_pred = model.predict(test_x)
+
+    train_rmse = mean_squared_error(train_y, train_pred, squared=False)
+    val_rmse = mean_squared_error(val_y, val_pred, squared=False)
+    test_rmse = mean_squared_error(test_y, test_pred, squared=False)
+
+    print(f'Train RMSE: {train_rmse}')
+    print(f'Validation RMSE: {val_rmse}')
+    print(f'Test RMSE: {test_rmse}')
