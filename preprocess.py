@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error
 
 
@@ -87,10 +87,11 @@ def preprocess(logs, scores):
     return stat, score
 
 def split(x, y):
-    train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.4)
-    val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=0.5)
+    train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.2)
+    # val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=0.5)
 
-    return train_x, train_y, val_x, val_y, test_x, test_y
+    # return train_x, train_y, val_x, val_y, test_x, test_y
+    return train_x, train_y, test_x, test_y
 
 
 if __name__ == '__main__':
@@ -99,28 +100,47 @@ if __name__ == '__main__':
 
     x, y = preprocess(logs, scores)
 
-    train_x, train_y, val_x, val_y, test_x, test_y = split(x, y)
+    # print(y)
 
+    # label_encoder is used for logistic regression, since it is expecting categorical labels
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y)
+    # print(y)
+
+    # train_x, train_y, val_x, val_y, test_x, test_y = split(x, y)
+    train_x, train_y, test_x, test_y = split(x, y)
     # print(train_x.shape, train_y.shape)
 
     scaler = StandardScaler()
     train_x = scaler.fit_transform(train_x)
-    val_x = scaler.transform(val_x)
+    # val_x = scaler.transform(val_x)
     test_x = scaler.transform(test_x)
 
     # print(train_y.unique())
 
-    model = RandomForestRegressor()
+    kf = KFold(n_splits=5)
+    train_rmse = 0
+    val_rmse = 0
+    for i, (train_idx, val_idx) in enumerate(kf.split(train_x)):
+        # model = RandomForestRegressor()
+        model = LogisticRegression(multi_class='multinomial', max_iter=1000)
+        # print(train_x[train_idx])
 
+        model.fit(train_x[train_idx], train_y[train_idx])
+
+        train_pred = model.predict(train_x[train_idx])
+        val_pred = model.predict(train_x[val_idx])
+
+        train_rmse += mean_squared_error((train_y[train_idx] + 1) / 2, (train_pred + 1) / 2, squared=False)
+        val_rmse += mean_squared_error((train_y[val_idx] + 1) / 2, (val_pred + 1) / 2, squared=False)
+
+    train_rmse = train_rmse / 5
+    val_rmse = val_rmse / 5
+
+    model = LogisticRegression(multi_class='multinomial', max_iter=1000)
     model.fit(train_x, train_y)
-
-    train_pred = model.predict(train_x)
-    val_pred = model.predict(val_x)
     test_pred = model.predict(test_x)
-
-    train_rmse = mean_squared_error(train_y, train_pred, squared=False)
-    val_rmse = mean_squared_error(val_y, val_pred, squared=False)
-    test_rmse = mean_squared_error(test_y, test_pred, squared=False)
+    test_rmse = mean_squared_error((test_y + 1) / 2, (test_pred + 1) / 2, squared=False)
 
     print(f'Train RMSE: {train_rmse}')
     print(f'Validation RMSE: {val_rmse}')
