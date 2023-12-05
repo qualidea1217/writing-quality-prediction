@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.metrics import mean_squared_error
 
 
@@ -90,40 +91,27 @@ def split(x, y):
     train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.2)
     # val_x, test_x, val_y, test_y = train_test_split(test_x, test_y, test_size=0.5)
 
-    # return train_x, train_y, val_x, val_y, test_x, test_y
-    return train_x, train_y, test_x, test_y
+    # return train_x, train_y, test_x, test_y
+    return train_x, train_y.to_numpy(), test_x, test_y.to_numpy()
 
-
-if __name__ == '__main__':
-    logs = pd.read_csv('./data/train_logs.csv')
-    scores = pd.read_csv('./data/train_scores.csv')
-
-    x, y = preprocess(logs, scores)
-
-    # print(y)
-
-    # label_encoder is used for logistic regression, since it is expecting categorical labels
-    label_encoder = LabelEncoder()
-    y = label_encoder.fit_transform(y)
-    # print(y)
-
-    # train_x, train_y, val_x, val_y, test_x, test_y = split(x, y)
-    train_x, train_y, test_x, test_y = split(x, y)
-    # print(train_x.shape, train_y.shape)
-
-    scaler = StandardScaler()
-    train_x = scaler.fit_transform(train_x)
-    # val_x = scaler.transform(val_x)
-    test_x = scaler.transform(test_x)
-
-    # print(train_y.unique())
-
+def kfoldcv(train_x, train_y, test_x, test_y):
     kf = KFold(n_splits=5)
     train_rmse = 0
     val_rmse = 0
+
     for i, (train_idx, val_idx) in enumerate(kf.split(train_x)):
-        # model = RandomForestRegressor()
-        model = LogisticRegression(multi_class='multinomial', max_iter=1000)
+        model = RandomForestRegressor(
+            criterion='poisson',
+            max_depth=None,
+            max_features='sqrt',
+            min_samples_leaf=2,
+            min_samples_split=2,
+            n_estimators=100,
+            n_jobs=-1
+        )
+        # model = LogisticRegression(penalty='l1', C=0.1, solver='saga', multi_class='multinomial', max_iter=5000)
+        # model = DecisionTreeClassifier(criterion='gini', max_depth=10, min_samples_leaf=4, min_samples_split=10)
+        # model = DecisionTreeRegressor(criterion='absolute_error', max_depth=10, min_samples_leaf=4, min_samples_split=10)
         # print(train_x[train_idx])
 
         model.fit(train_x[train_idx], train_y[train_idx])
@@ -131,17 +119,91 @@ if __name__ == '__main__':
         train_pred = model.predict(train_x[train_idx])
         val_pred = model.predict(train_x[val_idx])
 
-        train_rmse += mean_squared_error((train_y[train_idx] + 1) / 2, (train_pred + 1) / 2, squared=False)
-        val_rmse += mean_squared_error((train_y[val_idx] + 1) / 2, (val_pred + 1) / 2, squared=False)
+        # train_rmse += mean_squared_error((train_y[train_idx] + 1) / 2, (train_pred + 1) / 2, squared=False)
+        # val_rmse += mean_squared_error((train_y[val_idx] + 1) / 2, (val_pred + 1) / 2, squared=False)
+        train_rmse += mean_squared_error(train_y[train_idx], train_pred, squared=False)
+        val_rmse += mean_squared_error(train_y[val_idx], val_pred, squared=False)
 
     train_rmse = train_rmse / 5
     val_rmse = val_rmse / 5
 
-    model = LogisticRegression(multi_class='multinomial', max_iter=1000)
+    model = RandomForestRegressor(
+        criterion='poisson',
+        max_depth=None,
+        max_features='sqrt',
+        min_samples_leaf=2,
+        min_samples_split=2,
+        n_estimators=100,
+        n_jobs=-1
+    )
+    # model = LogisticRegression(penalty='l1', C=0.1, solver='saga', multi_class='multinomial', max_iter=5000)
+    # model = DecisionTreeClassifier(criterion='gini', max_depth=10, min_samples_leaf=4, min_samples_split=10)
+    # model = DecisionTreeRegressor(criterion='absolute_error', max_depth=10, min_samples_leaf=4, min_samples_split=10)
     model.fit(train_x, train_y)
     test_pred = model.predict(test_x)
-    test_rmse = mean_squared_error((test_y + 1) / 2, (test_pred + 1) / 2, squared=False)
+    # test_rmse = mean_squared_error((test_y + 1) / 2, (test_pred + 1) / 2, squared=False)
+    test_rmse = mean_squared_error(test_y, test_pred, squared=False)
 
     print(f'Train RMSE: {train_rmse}')
     print(f'Validation RMSE: {val_rmse}')
     print(f'Test RMSE: {test_rmse}')
+
+def gridsearch(train_x, train_y, param_grid, model):
+    grid_search = GridSearchCV(model, param_grid, cv=5, scoring='neg_root_mean_squared_error', n_jobs=-1)
+    grid_search.fit(train_x, train_y)
+    best_params = grid_search.best_params_
+    best_model = grid_search.best_estimator_
+    return best_params, best_model
+
+if __name__ == '__main__':
+    logs = pd.read_csv('./data/train_logs.csv')
+    scores = pd.read_csv('./data/train_scores.csv')
+
+    print(logs['id'].unique().shape)
+
+    x, y = preprocess(logs, scores)
+
+    # label_encoder is used for logistic regression, since it is expecting categorical labels
+    # label_encoder = LabelEncoder()
+    # y = label_encoder.fit_transform(y)
+
+    # train_x, train_y, val_x, val_y, test_x, test_y = split(x, y)
+    train_x, train_y, test_x, test_y = split(x, y)
+    print(train_x.shape, train_y.shape)
+    print(test_x.shape, test_y.shape)
+
+    scaler = StandardScaler()
+    train_x = scaler.fit_transform(train_x)
+    # val_x = scaler.transform(val_x)
+    test_x = scaler.transform(test_x)
+
+    # for logistic regression
+    # print(train_y.unique())
+    # param_grid = {
+    #     'penalty': ['l1', 'l2'],  # Regularization type
+    #     'C': [0.001, 0.01, 0.1, 1, 10, 100]  # Inverse of regularization strength
+    # }
+    # model = LogisticRegression(multi_class='multinomial', max_iter=5000, solver='saga')
+
+    # param_grid = {
+    #     'criterion': ['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
+    #     'max_depth': [None, 10, 20, 30, 40, 50],
+    #     'min_samples_split': [2, 5, 10],
+    #     'min_samples_leaf': [1, 2, 4]
+    # }
+    # model = DecisionTreeRegressor()
+
+    # param_grid = {
+    #     'n_estimators': [50, 100, 200],
+    #     'criterion': ['squared_error', 'absolute_error', 'friedman_mse', 'poisson'],
+    #     'max_depth': [None, 10, 20, 30],
+    #     'min_samples_split': [2, 5, 10],
+    #     'min_samples_leaf': [1, 2, 4],
+    #     'max_features': ['sqrt', 'log2']
+    # }
+    # model = RandomForestRegressor()
+    # best_params, best_model = gridsearch(train_x, train_y, param_grid, model)
+    # print(best_params)
+    kfoldcv(train_x, train_y, test_x, test_y)
+
+
