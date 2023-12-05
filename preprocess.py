@@ -8,8 +8,20 @@ from sklearn.metrics import mean_squared_error
 
 
 def preprocess(logs, scores):
+    """
+
+    :param logs: train_log read directly from csv
+    :param scores: train_score read directly from csv
+    :return:
+        stat: training data
+            each row represents an essay with statistical features
+        score: training label
+            scores of each essay
+    """
     data = pd.merge(logs, scores, on='id')
 
+    # activity has a "Move From [x1, y1] To [x2, y2]" with different coordinates
+    # changing this to the same "MoveTo" category
     data['activity'].replace(
         to_replace=r'Move From \[\d*, \d*\] To \[\d*, \d*\]',
         value='MoveTo',
@@ -17,11 +29,14 @@ def preprocess(logs, scores):
         inplace=True
     )
 
+    # Count of each activity
     activity_counts = data.groupby('id')['activity'].value_counts(normalize=True).reset_index()
     activity_counts = activity_counts.pivot(index='id', columns='activity', values='proportion').reset_index()
     activity_counts.fillna(value=0, inplace=True)
     # print(activity_counts)
 
+    # Count of the top 35 popular down events
+    # there are more than 100 events. the rest are discarded
     down_event_stat = data['down_event'].value_counts().reset_index()
     down_event_to_keep = down_event_stat.nlargest(n=35, columns='count', keep='all')['down_event']
     # print(down_event_to_keep)
@@ -33,6 +48,8 @@ def preprocess(logs, scores):
     down_events['id'] = down_event_counts['id']
     # print(down_events)
 
+    # Same operation as down_event
+    # But make it separate to avoid mismatch between down_event and up_event
     up_event_stat = data['up_event'].value_counts().reset_index()
     up_event_to_keep = up_event_stat.nlargest(n=35, columns='count', keep='all')['up_event']
     # print(up_event_to_keep)
@@ -47,23 +64,27 @@ def preprocess(logs, scores):
     events = pd.merge(left=down_events, right=up_events, on='id', suffixes=("_down", "_up"))
     # print(events)
 
+    # take averages of the following feature
     average_columns = ['down_time', 'up_time', 'action_time', 'score']
     averaged = data.groupby('id')[average_columns].mean().reset_index()
     # print(averaged)
 
+    # take max of the following feature
     max_columns = ['word_count']
     maximum = data.groupby('id')[max_columns].max().reset_index()
 
+    # merge above features together
     preprocessed = pd.merge(activity_counts, events, on='id')
     preprocessed = pd.merge(preprocessed, averaged, on='id')
     preprocessed = pd.merge(preprocessed, maximum, on='id')
 
+    # extract score
     # print(preprocessed)
     score = preprocessed.loc[:, 'score']
-    label = preprocessed.drop('score', axis=1)
-    label = preprocessed.drop('id', axis=1)
+    stat = preprocessed.drop('score', axis=1)
+    stat = stat.drop('id', axis=1)
 
-    return label, score
+    return stat, score
 
 def split(x, y):
     train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.4)
