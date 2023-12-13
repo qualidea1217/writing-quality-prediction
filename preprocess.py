@@ -204,6 +204,6 @@ if __name__ == '__main__':
     # model = RandomForestRegressor()
     # best_params, best_model = gridsearch(train_x, train_y, param_grid, model)
     # print(best_params)
-    kfoldcv(train_x, train_y, test_x, test_y)
+    # kfoldcv(train_x, train_y, test_x, test_y)
 
 
