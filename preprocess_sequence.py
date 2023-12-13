@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.metrics import mean_squared_error
 
-sequence_length = 262
+sequence_length = 1500
 
 def preprocess(logs, scores):
     logs['activity'].replace(
@@ -38,11 +38,13 @@ def preprocess(logs, scores):
             #     sequences.append(sequence)
             #     break
         # print(group[])
-        sequence = group[features][:sequence_length]
+        if group[features].shape[0] >= sequence_length:
+            sequence = group[features][:sequence_length]
+            sequences.append(sequence)
         # print(sequence.shape)
-        if group[features].shape[0] < min_len:
-            min_len = group[features].shape[0]
-        sequences.append(sequence)
+        # if group[features].shape[0] < min_len:
+        #     min_len = group[features].shape[0]
+
     # print(np.array(sequences).shape)
     # print(min_len)
     return np.array(sequences), scores.to_numpy()

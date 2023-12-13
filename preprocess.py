@@ -40,50 +40,93 @@ def preprocess(logs, scores):
     # there are more than 100 events. the rest are discarded
     down_event_stat = data['down_event'].value_counts().reset_index()
     down_event_to_keep = down_event_stat.nlargest(n=35, columns='count', keep='all')['down_event']
-    # print(down_event_to_keep)
-    down_event_counts = data.groupby('id')['down_event'].value_counts(normalize=True).reset_index()
-    # print(down_event_counts)
-    down_event_counts = down_event_counts.pivot(index='id', columns='down_event', values='proportion').reset_index()
-    down_event_counts.fillna(value=0, inplace=True)
-    down_events = down_event_counts.loc[:, down_event_to_keep]
-    down_events['id'] = down_event_counts['id']
-    # print(down_events)
+    # print(down_event_to_keep.tolist())
+    down_event_data = data.copy()
+    down_event_data['down_event'] = down_event_data['down_event'].apply(
+        lambda x: x if x in down_event_to_keep.tolist() else 'other')
+    # print(down_event_data)
+    down_event_counts = down_event_data.groupby('id')['down_event'].value_counts(normalize=True).reset_index()
+    print(down_event_counts)
+    down_events = down_event_counts.pivot(index='id', columns='down_event', values='proportion').reset_index()
+    down_events.fillna(value=0, inplace=True)
+    # down_events = down_event_counts.loc[:, down_event_to_keep]
+    down_events['id'] = activity_counts['id']
+    print(down_events)
 
     # Same operation as down_event
     # But make it separate to avoid mismatch between down_event and up_event
     up_event_stat = data['up_event'].value_counts().reset_index()
     up_event_to_keep = up_event_stat.nlargest(n=35, columns='count', keep='all')['up_event']
-    # print(up_event_to_keep)
-    up_event_counts = data.groupby('id')['up_event'].value_counts(normalize=True).reset_index()
+    # print(up_event_to_keep.tolist())
+    up_event_data = data
+    up_event_data['up_event'] = up_event_data['up_event'].apply(
+        lambda x: x if x in up_event_to_keep.tolist() else 'other')
+    up_event_counts = up_event_data.groupby('id')['up_event'].value_counts(normalize=True).reset_index()
     # print(up_event_counts)
-    up_event_counts = up_event_counts.pivot(index='id', columns='up_event', values='proportion').reset_index()
-    up_event_counts.fillna(value=0, inplace=True)
-    up_events = up_event_counts.loc[:, up_event_to_keep]
-    up_events['id'] = up_event_counts['id']
+    up_events = up_event_counts.pivot(index='id', columns='up_event', values='proportion').reset_index()
+    up_events.fillna(value=0, inplace=True)
+    # up_events = up_event_counts.loc[:, up_event_to_keep]
+    up_events['id'] = activity_counts['id']
     # print(up_events)
 
     events = pd.merge(left=down_events, right=up_events, on='id', suffixes=("_down", "_up"))
     # print(events)
 
     # take averages of the following feature
-    average_columns = ['down_time', 'up_time', 'action_time', 'score']
+    average_columns = ['action_time', 'score']
     averaged = data.groupby('id')[average_columns].mean().reset_index()
+    averaged = averaged.rename(columns={'action_time': 'avg_action_time'})
     # print(averaged)
 
     # take max of the following feature
-    max_columns = ['word_count']
+    max_columns = ['word_count', 'action_time']
     maximum = data.groupby('id')[max_columns].max().reset_index()
+    maximum = maximum.rename(columns={
+        'word_count': 'max_word_count',
+        'action_time': 'max_action_time'
+    })
+
+    last_columns = ['word_count', 'up_time']
+    last = data.groupby('id')[last_columns].last().reset_index()
+    last = last.rename(columns={
+        'word_count': 'final_word_count',
+        'up_time': 'total_duration'
+    })
+
+    first_columns = ['down_time']
+    first = data.groupby('id')[first_columns].first().reset_index()
+    first = first.rename(columns={
+        'down_time': 'start_time'
+    })
+
+    count = data.groupby('id')['event_id'].count().reset_index()
+    count = count.rename(columns={
+        'event_id': 'total_operations'
+    })
+    # print(count)
 
     # merge above features together
     preprocessed = pd.merge(activity_counts, events, on='id')
     preprocessed = pd.merge(preprocessed, averaged, on='id')
     preprocessed = pd.merge(preprocessed, maximum, on='id')
+    preprocessed = pd.merge(preprocessed, last, on='id')
+    preprocessed = pd.merge(preprocessed, count, on='id')
+
+    # print(activity_counts.shape)
+    # print(events.shape)
+    # print(averaged.shape)
+    # print(maximum.shape)
+    # print(last.shape)
+    # print(count.shape)
 
     # extract score
     # print(preprocessed)
     score = preprocessed.loc[:, 'score']
     stat = preprocessed.drop('score', axis=1)
     stat = stat.drop('id', axis=1)
+
+    print(stat.shape)
+    # print(stat.columns)
 
     return stat, score
 
