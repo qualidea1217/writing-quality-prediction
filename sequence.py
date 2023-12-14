@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
+import matplotlib.pyplot as plt
 
 # Check if CUDA (GPU support) is available and set the device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -33,7 +34,7 @@ grouped = data.groupby('id')
 sequences = [group.drop(['id'], axis=1).values for _, group in grouped]
 
 # Convert sequences to PyTorch tensors and pad
-padded_sequences = pad_sequence([torch.tensor(seq).float() for seq in sequences], batch_first=True)
+padded_sequences = pad_sequence([torch.tensor(seq[-500 * j:]).float() for seq in sequences], batch_first=True)
 
 # Prepare target variable (scores)
 target = torch.tensor(scores).float()
@@ -51,7 +52,7 @@ test_loader = DataLoader(test_data, batch_size=64)
 
 # Define LSTM model using nn.Sequential
 input_size = X_train.size(2)  # Number of features
-hidden_size = 100
+hidden_size = 300
 output_size = 1
 
 model = nn.Sequential(
@@ -70,7 +71,7 @@ def lstm_output(x):
 
 # Loss and optimizer
 criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
 # Training loop
@@ -88,7 +89,7 @@ def train_model():
 
 
 # Train the model
-for epoch in range(10):
+for epoch in range(20):
     print(f"epoch: {epoch}")
     train_model()
 

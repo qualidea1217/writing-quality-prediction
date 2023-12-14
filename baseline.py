@@ -61,14 +61,15 @@ def objective_xgb(trial):
 
 
 if __name__ == "__main__":
+    # load raw data
     train_logs = pd.read_csv('data/train_logs.csv', low_memory=True)
     test_logs = pd.read_csv('data/test_logs.csv', low_memory=True)
     train_scores = pd.read_csv('data/train_scores.csv', low_memory=True)
 
+    # preprocess data
     train_data = pd.merge(train_logs, train_scores, on='id')
     features = train_data.drop(['id', "event_id", 'score'], axis=1)
     target = train_data['score']
-
     features = preprocess_data(features)
     X_train, X_val, y_train, y_val = train_test_split(features, target, test_size=0.2, random_state=42)
 
@@ -82,7 +83,7 @@ if __name__ == "__main__":
     best_model_lgbm = LGBMRegressor(**best_params_lgbm, random_state=42, device="gpu")
 
     best_params_xgb = study_xgb.best_params
-    best_model_xgb = XGBRegressor(**best_params_xgb, random_state=42, tree_method='gpu_hist')
+    best_model_xgb = XGBRegressor(**best_params_xgb, random_state=42, tree_method='hist', device="cuda")
 
     ensemble = VotingRegressor(estimators=[('lgbm', best_model_lgbm), ('xgb', best_model_xgb)], n_jobs=-1)
     # ensemble = VotingRegressor(estimators=[('xgb', best_model_xgb)], n_jobs=-1)
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     plt.title('Feature Importance for LightGBM (in the ensemble)')
     plt.show()
 
-    test_features = preprocess_data(test_logs.drop('id', axis=1))
+    test_features = preprocess_data(test_logs.drop(['id', "event_id"], axis=1))
     test_predictions = ensemble.predict(test_features)
     print(test_predictions)
 
