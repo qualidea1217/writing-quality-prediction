@@ -34,7 +34,7 @@ grouped = data.groupby('id')
 sequences = [group.drop(['id'], axis=1).values for _, group in grouped]
 
 # Convert sequences to PyTorch tensors and pad
-padded_sequences = pad_sequence([torch.tensor(seq[-500 * j:]).float() for seq in sequences], batch_first=True)
+padded_sequences = pad_sequence([torch.tensor(seq[-500:]).float() for seq in sequences], batch_first=True)
 
 # Prepare target variable (scores)
 target = torch.tensor(scores).float()
